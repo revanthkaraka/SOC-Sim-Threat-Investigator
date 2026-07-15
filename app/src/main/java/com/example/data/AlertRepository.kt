@@ -8,7 +8,7 @@ class AlertRepository(private val alertDao: AlertDao) {
 
     fun getAlertById(id: Int): Flow<AlertEntity?> = alertDao.getAlertById(id)
 
-    suspend fun insertAlert(alert: AlertEntity) = alertDao.insertAlert(alert)
+    suspend fun insertAlert(alert: AlertEntity): Long = alertDao.insertAlert(alert)
 
     suspend fun updateAlert(alert: AlertEntity) = alertDao.updateAlert(alert)
 

@@ -16,7 +16,7 @@ interface AlertDao {
     fun getAlertById(id: Int): Flow<AlertEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAlert(alert: AlertEntity)
+    suspend fun insertAlert(alert: AlertEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAlerts(alerts: List<AlertEntity>)

@@ -19,15 +19,15 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class AlertViewModel(
-    application: Application,
     private val repository: AlertRepository
-) : AndroidViewModel(application) {
+) : ViewModel() {
 
     // List of alerts observed from Room database
     val alerts: StateFlow<List<AlertEntity>> = repository.allAlerts
@@ -276,19 +276,208 @@ class AlertViewModel(
         context.startActivity(Intent.createChooser(intent, "Share Incident Report"))
     }
 
+    fun awardPhishingPoints() {
+        _gameScore.value += 40
+        _statusMessage.value = "Phishing telemetry scanned! (+40 pts)"
+    }
+
     fun clearStatusMessage() {
         _statusMessage.value = null
     }
 
+    private data class SimulatedData(
+        val tactic: String,
+        val technique: String,
+        val port: String,
+        val log: String,
+        val script: String
+    )
+
+    fun triggerSimulatedScenario(name: String, severity: String, host: String) {
+        viewModelScope.launch {
+            val timestampStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss 'UTC'", java.util.Locale.getDefault()).format(java.util.Date())
+            
+            val data = when (name) {
+                "WannaScream Ransomware" -> SimulatedData(
+                    tactic = "Impact",
+                    technique = "T1486 (Data Encrypted for Impact)",
+                    port = "445",
+                    log = """{
+  "timestamp": "$timestampStr",
+  "event_type": "endpoint_compromise",
+  "hostname": "$host",
+  "alert_name": "Ransomware Encrypted Payload Execution",
+  "process": "tasksche.exe",
+  "action": "DETECTED_ACTIVE",
+  "directories_encrypted": [
+    "C:\\Users\\Finance\\Documents",
+    "C:\\Users\\Shared\\Database"
+  ],
+  "ransom_note_dropped": "true",
+  "extension_added": ".screamed"
+}""".trimIndent(),
+                    script = """
+                    # Python SOAR Playbook: Quarantine Host & Terminate Ransomware Thread
+                    import os
+                    import sys
+                    
+                    def kill_and_isolate_node(proc, hostname):
+                        print(f"[*] Terminating rogue process: {proc} on {hostname}")
+                        print("[+] Staged Command: taskkill /F /IM " + proc)
+                        print("[*] Initiating host level isolation via switch control...")
+                        print(f"[+] Successfully isolated {hostname} from corporate subnet.")
+                        
+                    if __name__ == '__main__':
+                        kill_and_isolate_node("tasksche.exe", "$host")
+                    """.trimIndent()
+                )
+                
+                "SQL Injection Database Leak" -> SimulatedData(
+                    tactic = "Credential Access",
+                    technique = "T1190 (Exploit Public-Facing Application)",
+                    port = "3306",
+                    log = """{
+  "timestamp": "$timestampStr",
+  "event_type": "sql_injection_probe",
+  "attacker_ip": "$host",
+  "target_url": "https://api.company.local/v2/users/search",
+  "payload": "UNION SELECT username, password_hash FROM admin_users --",
+  "http_response_code": 200,
+  "bytes_returned": 10485,
+  "vulnerability": "SQLi in SQL Statement Construction"
+}""".trimIndent(),
+                    script = """
+                    # Python SOAR Playbook: Inject WAF Query Filter Rule
+                    import urllib.request
+                    import json
+                    
+                    def waf_block_pattern(attacker_ip):
+                        print(f"[*] Applying Web Application Firewall block rule for IP: {attacker_ip}")
+                        payload = {"block_ip": attacker_ip, "reason": "SQLi UNION probe detected", "waf_policy": "Strict"}
+                        print(f"[+] API Request dispatched to cloud WAF with body: {json.dumps(payload)}")
+                        print("[+] Attacker IP has been blacklisted at the perimeter proxy gateway.")
+                        
+                    if __name__ == '__main__':
+                        waf_block_pattern("$host")
+                    """.trimIndent()
+                )
+                
+                "DDoS SYN Volumetric Flood" -> SimulatedData(
+                    tactic = "Impact",
+                    technique = "T1498 (Network Denial of Service)",
+                    port = "80 / 443",
+                    log = """{
+  "timestamp": "$timestampStr",
+  "event_type": "ddos_attack",
+  "attacker_ip": "$host",
+  "packets_per_sec": 8504000,
+  "bandwidth_gbps": 12.4,
+  "vulnerability": "SYN Volumetric TCP Flood",
+  "state": "Degraded Service Egress"
+}""".trimIndent(),
+                    script = """
+                    # Python SOAR Playbook: Deploy Anycast DDoS Mitigation
+                    import urllib.request
+                    
+                    def enable_ddos_shield(attack_src):
+                        print(f"[*] Initiating cloud scrubbing protocol for target IP block: {attack_src}")
+                        print("[+] Successfully activated DDoS shield Anycast rerouting.")
+                        print("[+] Malicious volume packets redirected to scrubbing centers.")
+                        
+                    if __name__ == '__main__':
+                        enable_ddos_shield("$host")
+                    """.trimIndent()
+                )
+                
+                "Linux Local Privilege Escalation" -> SimulatedData(
+                    tactic = "Privilege Escalation",
+                    technique = "T1068 (Exploitation for Privilege Escalation)",
+                    port = "N/A",
+                    log = """{
+  "timestamp": "$timestampStr",
+  "event_type": "privilege_escalation_alert",
+  "hostname": "$host",
+  "user": "developer_temp",
+  "uid": 1004,
+  "target_binary": "/usr/bin/sudo",
+  "exploit_signature": "CVE-2021-3156 (Baron Samedit)",
+  "result": "ROOT_SHELL_OPENED"
+}""".trimIndent(),
+                    script = """
+                    # Python SOAR Playbook: Revoke SSH Shell Access
+                    import subprocess
+                    
+                    def disable_user_account(username):
+                        print(f"[*] Revoking PAM credentials and shell access for: {username}")
+                        print("[+] Staged Command: usermod -L " + username)
+                        print("[+] Staged Command: pkill -u " + username)
+                        print(f"[+] Account {username} successfully locked on target system.")
+                        
+                    if __name__ == '__main__':
+                        disable_user_account("developer_temp")
+                    """.trimIndent()
+                )
+                
+                else -> SimulatedData(
+                    tactic = "Command and Control",
+                    technique = "T1071 (Application Layer Protocol)",
+                    port = "53",
+                    log = """{
+  "timestamp": "$timestampStr",
+  "event_type": "dns_tunnel_beacon",
+  "src_ip": "$host",
+  "target_dns_server": "8.8.8.8",
+  "anomalous_query": "4165733235364b6579.malicious-domain.com",
+  "query_type": "TXT",
+  "data_leak_rate_bytes": 12845
+}""".trimIndent(),
+                    script = """
+                    # Python SOAR Playbook: Block Rogue DNS Queries
+                    import subprocess
+                    
+                    def block_dns_c2(attacker_dns_domain, client_ip):
+                        print(f"[*] Blocking C2 lookup DNS domain: {attacker_dns_domain}")
+                        print(f"[*] Flushing DNS resolver cache on active client node: {client_ip}")
+                        print(f"[+] Staged Command: ip route add blackhole 185.112.146.0/24")
+                        print("[+] C2 Beacon channel severed.")
+                        
+                    if __name__ == '__main__':
+                        block_dns_c2("malicious-domain.com", "$host")
+                    """.trimIndent()
+                )
+            }
+
+            val alert = com.example.data.AlertEntity(
+                title = "$name Detected",
+                severity = severity,
+                status = "New",
+                classification = "Unassigned",
+                timestamp = timestampStr,
+                sourceIp = host,
+                destinationPort = data.port,
+                rawLog = data.log,
+                remediationScript = data.script,
+                mitreTactic = data.tactic,
+                mitreTechnique = data.technique,
+                blastRadiusPath = "$host ➔ Edge Router ➔ SOC Alarm Channel",
+                aiExplanation = null,
+                aiPlaybook = null
+            )
+            
+            val newId = repository.insertAlert(alert)
+            _selectedAlertId.value = newId.toInt()
+            _statusMessage.value = "⚠️ SIMULATED CYBER THREAT TRIGGERED SUCCESSFULLY!"
+        }
+    }
+
     // Factory to instantiate AlertViewModel with repository constructor parameter
     class Factory(
-        private val application: Application,
         private val repository: AlertRepository
     ) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(AlertViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
-                return AlertViewModel(application, repository) as T
+                return AlertViewModel(repository) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }

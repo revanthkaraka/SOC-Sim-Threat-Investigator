@@ -3,6 +3,9 @@ package com.example
 import android.app.Application
 import android.os.Bundle
 import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -60,7 +63,12 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -130,13 +138,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 // Initialize Room Database & Repository
-                val context = LocalContext.current.applicationContext
-                val database = remember { AppDatabase.getDatabase(context) }
+                val context = LocalContext.current
+                val database = remember { AppDatabase.getDatabase(context.applicationContext) }
                 val repository = remember { AlertRepository(database.alertDao()) }
                 
                 // Get the ViewModel via Factory
                 val viewModel: AlertViewModel = viewModel(
-                    factory = AlertViewModel.Factory(context as Application, repository)
+                    factory = AlertViewModel.Factory(repository)
                 )
 
                 SocSimApp(viewModel)
@@ -310,7 +318,8 @@ fun SocSimApp(viewModel: AlertViewModel) {
                                     AlertQueuePane(
                                         alerts = alerts,
                                         selectedId = selectedAlertId,
-                                        onSelect = { viewModel.selectAlert(it) }
+                                        onSelect = { viewModel.selectAlert(it) },
+                                        viewModel = viewModel
                                     )
                                 }
 
@@ -338,7 +347,8 @@ fun SocSimApp(viewModel: AlertViewModel) {
                                     AlertQueuePane(
                                         alerts = alerts,
                                         selectedId = selectedAlertId,
-                                        onSelect = selectAndNavigate
+                                        onSelect = selectAndNavigate,
+                                        viewModel = viewModel
                                     )
                                 } else {
                                     if (selectedAlert != null) {
@@ -362,6 +372,15 @@ fun SocSimApp(viewModel: AlertViewModel) {
 
 @Composable
 fun HeaderBar(alertCount: Int, gameScore: Int, avgTriageTime: Int) {
+    var currentTime by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        val sdf = SimpleDateFormat("HH:mm:ss 'UTC'", Locale.US)
+        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        while (true) {
+            currentTime = sdf.format(Date())
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -399,18 +418,36 @@ fun HeaderBar(alertCount: Int, gameScore: Int, avgTriageTime: Int) {
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(5.dp)
-                            .background(Color(0xFF00FF66), shape = CircleShape)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(Color(0xFF00FF66), shape = CircleShape)
+                        )
+                        Text(
+                            text = "ACTIVE ENGINE",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = CyberMuted,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Text(
+                        text = "•",
+                        fontSize = 8.sp,
+                        color = CyberBorder
                     )
                     Text(
-                        text = "ACTIVE ENGINE",
+                        text = currentTime,
                         fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
-                        color = CyberMuted,
+                        color = CyberPrimary,
                         letterSpacing = 0.5.sp
                     )
                 }
@@ -498,24 +535,48 @@ fun HeaderBar(alertCount: Int, gameScore: Int, avgTriageTime: Int) {
 fun AlertQueuePane(
     alerts: List<AlertEntity>,
     selectedId: Int?,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    viewModel: com.example.ui.AlertViewModel
 ) {
+    var showScenarioDialog by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "ALERTS QUEUE",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = CyberSubtext,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp, start = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "ALERTS QUEUE",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = CyberSubtext,
+                letterSpacing = 1.sp
+            )
+            
+            TextButton(
+                onClick = { showScenarioDialog = true },
+                modifier = Modifier.height(28.dp).testTag("trigger_scenario_button"),
+                colors = ButtonDefaults.textButtonColors(contentColor = CyberPrimary)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Trigger Attack",
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("TRIGGER ATTACK", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
 
         if (alerts.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(CyberCard, shape = RoundedCornerShape(16.dp))
-                    .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(16.dp)),
+                    .background(CyberCard, shape = RoundedCornerShape(12.dp))
+                    .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text("No incidents in queue.", color = CyberMuted)
@@ -536,6 +597,91 @@ fun AlertQueuePane(
                 }
             }
         }
+    }
+
+    if (showScenarioDialog) {
+        val criticalRedBg = Color(0xFF2E1515)
+        AlertDialog(
+            onDismissRequest = { showScenarioDialog = false },
+            title = {
+                Text(
+                    text = "SELECT CYBER ATTACK SCENARIO",
+                    color = CyberPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Inject a live simulated threat vector into the security monitoring queue to test containment controls & playbooks.",
+                        fontSize = 11.sp,
+                        color = CyberSubtext
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    val scenarios = listOf(
+                        Triple("WannaScream Ransomware", "CRITICAL", "Host-WS-12"),
+                        Triple("SQL Injection Database Leak", "HIGH", "192.168.10.14"),
+                        Triple("DDoS SYN Volumetric Flood", "HIGH", "185.90.11.45"),
+                        Triple("Linux Local Privilege Escalation", "MEDIUM", "Prod-Proxy-01"),
+                        Triple("C2 DNS Tunneling beacon", "MEDIUM", "10.1.55.82")
+                    )
+                    
+                    scenarios.forEach { (name, severity, host) ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.triggerSimulatedScenario(name, severity, host)
+                                    showScenarioDialog = false
+                                },
+                            colors = CardDefaults.cardColors(containerColor = CyberLogBg),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, CyberBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(name, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CyberText)
+                                    Text("Origin/Target: $host", fontSize = 9.sp, color = CyberMuted)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            if (severity == "CRITICAL") criticalRedBg else Color(0xFF261D03),
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = severity,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (severity == "CRITICAL") CriticalRed else Color(0xFFFFB300)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showScenarioDialog = false }) {
+                    Text("CANCEL", color = CyberMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = CyberCard,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(16.dp))
+        )
     }
 }
 
@@ -575,19 +721,19 @@ fun AlertQueueCard(
         Modifier.border(
             width = (1.5).dp,
             color = CyberPrimary,
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(12.dp)
         )
     } else if (alert.severity.uppercase() == "CRITICAL") {
         Modifier.border(
             width = 1.dp,
             color = CriticalRed.copy(alpha = borderAlpha),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(12.dp)
         )
     } else {
         Modifier.border(
             width = 1.dp,
             color = CyberBorder,
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(12.dp)
         )
     }
 
@@ -600,7 +746,7 @@ fun AlertQueueCard(
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) CyberCard.copy(alpha = 0.8f) else CyberCard
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -762,9 +908,9 @@ fun BentoHeaderCard(alert: AlertEntity) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -859,9 +1005,9 @@ fun BentoLogsCard(alert: AlertEntity, viewModel: AlertViewModel) {
         modifier = Modifier
             .fillMaxWidth()
             .height(210.dp)
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp).fillMaxSize()) {
             Row(
@@ -909,14 +1055,15 @@ fun BentoLogsCard(alert: AlertEntity, viewModel: AlertViewModel) {
                     .background(CyberLogBg, shape = RoundedCornerShape(10.dp))
                     .border(width = 0.5.dp, color = CyberBorder, shape = RoundedCornerShape(10.dp))
                     .padding(10.dp)
-                    .verticalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState())
             ) {
                 Text(
                     text = alert.rawLog,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     color = Color(0xFF00FFCC), // Hacker-cyan console text
-                    lineHeight = 14.sp
+                    lineHeight = 14.sp,
+                    softWrap = false
                 )
             }
         }
@@ -948,9 +1095,9 @@ fun BentoRiskScoreCard(alert: AlertEntity) {
         modifier = Modifier
             .fillMaxWidth()
             .height(210.dp)
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp).fillMaxSize(),
@@ -1040,10 +1187,10 @@ fun BentoCopilotCard(
             .border(
                 width = 1.dp,
                 color = if (hasAnalysis) CyberPrimary.copy(alpha = 0.3f) else CyberBorder,
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(12.dp)
             ),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        shape = RoundedCornerShape(24.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Box(
             modifier = Modifier
@@ -1249,9 +1396,9 @@ fun BentoTriageActionsCard(alert: AlertEntity, viewModel: AlertViewModel) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(24.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(24.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1274,61 +1421,110 @@ fun BentoTriageActionsCard(alert: AlertEntity, viewModel: AlertViewModel) {
                     color = CyberMuted,
                     letterSpacing = 0.5.sp
                 )
-            }
-
-            // Triage Classification: True Positive / False Positive (Bento Grid Button layout)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.updateAlertClassification(alert, "True Positive") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .testTag("true_positive_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (alert.classification == "True Positive") Color(0xFF0D533A) else Color(0xFF1E2B24),
-                        contentColor = if (alert.classification == "True Positive") Color(0xFF00FF88) else CyberMuted
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = borderAlphaOnSelection(alert.classification == "True Positive", Color(0xFF00FF88))
+            }            // Triage Classification: True Positive / False Positive (Bento Grid Button layout)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "TP",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("True Positive", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { viewModel.updateAlertClassification(alert, "True Positive") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("true_positive_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (alert.classification == "True Positive") Color(0xFF0D533A) else Color(0xFF1E2B24),
+                            contentColor = if (alert.classification == "True Positive") Color(0xFF00FF88) else CyberMuted
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = borderAlphaOnSelection(alert.classification == "True Positive", Color(0xFF00FF88))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "TP",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("True Positive", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { viewModel.updateAlertClassification(alert, "False Positive") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("false_positive_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (alert.classification == "False Positive") Color(0xFF531E21) else Color(0xFF2C1E20),
+                            contentColor = if (alert.classification == "False Positive") CriticalRed else CyberMuted
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = borderAlphaOnSelection(alert.classification == "False Positive", CriticalRed)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cancel,
+                            contentDescription = "FP",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("False Positive", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
-                Button(
-                    onClick = { viewModel.updateAlertClassification(alert, "False Positive") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .testTag("false_positive_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (alert.classification == "False Positive") Color(0xFF531E21) else Color(0xFF2C1E20),
-                        contentColor = if (alert.classification == "False Positive") CriticalRed else CyberMuted
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    border = borderAlphaOnSelection(alert.classification == "False Positive", CriticalRed)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Cancel,
-                        contentDescription = "FP",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("False Positive", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { viewModel.updateAlertClassification(alert, "Suspicious") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("suspicious_classification_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (alert.classification == "Suspicious") Color(0xFF423B14) else Color(0xFF221F10),
+                            contentColor = if (alert.classification == "Suspicious") Color(0xFFFFCC00) else CyberMuted
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = borderAlphaOnSelection(alert.classification == "Suspicious", Color(0xFFFFCC00))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Suspicious",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Suspicious Threat", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { viewModel.updateAlertClassification(alert, "Security Drill") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("drill_classification_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (alert.classification == "Security Drill") Color(0xFF1B3B48) else Color(0xFF13222A),
+                            contentColor = if (alert.classification == "Security Drill") Color(0xFF00DFFF) else CyberMuted
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = borderAlphaOnSelection(alert.classification == "Security Drill", Color(0xFF00DFFF))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = "Drill",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Security Drill", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
             HorizontalDivider(color = CyberBorder.copy(alpha = 0.5f))
 
-            // Incident Lifecycle Status Triage (New, Investigating, Resolved)
+            // Incident Lifecycle Status Triage (New, Investigating, Escalated, Resolved)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "INCIDENT LIFECYCLE STATUS",
@@ -1341,14 +1537,14 @@ fun BentoTriageActionsCard(alert: AlertEntity, viewModel: AlertViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("New", "Investigating", "Resolved").forEach { status ->
+                    listOf("New", "Investigating", "Escalated", "Resolved").forEach { status ->
                         val active = alert.status.equals(status, ignoreCase = true)
                         val activeColor = when (status.lowercase()) {
                             "resolved" -> Color(0xFF00FF66)
                             "investigating" -> CyanAccent
+                            "escalated" -> CriticalRed
                             else -> Color(0xFFFFA500)
                         }
-
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -1392,10 +1588,7 @@ fun BentoTriageActionsCard(alert: AlertEntity, viewModel: AlertViewModel) {
 
                 OutlinedTextField(
                     value = notesText,
-                    onValueChange = {
-                        notesText = it
-                        viewModel.updateAlertNotes(alert, it)
-                    },
+                    onValueChange = { notesText = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("notes_input_field"),
@@ -1414,6 +1607,30 @@ fun BentoTriageActionsCard(alert: AlertEntity, viewModel: AlertViewModel) {
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
                 )
+
+                if (notesText != (alert.userNotes ?: "")) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.updateAlertNotes(alert, notesText)
+                                keyboardController?.hide()
+                            },
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("save_notes_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CyberPrimary,
+                                contentColor = CyberOnPrimary
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("SAVE FINDINGS (+30 pts)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1495,8 +1712,8 @@ fun EmptyStateView() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CyberCard, shape = RoundedCornerShape(24.dp))
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(24.dp)),
+            .background(CyberCard, shape = RoundedCornerShape(12.dp))
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1534,9 +1751,9 @@ fun BentoMitreMappingCard(alert: AlertEntity) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1639,9 +1856,9 @@ fun BentoBlastRadiusCard(alert: AlertEntity) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1821,9 +2038,9 @@ fun BentoSOARCard(alert: AlertEntity, viewModel: AlertViewModel) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            .border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1928,8 +2145,9 @@ fun BentoSOARCard(alert: AlertEntity, viewModel: AlertViewModel) {
                             color = Color(0xFF88FF88),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
                                 .height(110.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            softWrap = false
                         )
                     }
                 }
@@ -2014,9 +2232,9 @@ fun PhishingSandboxView(viewModel: AlertViewModel) {
     ) {
         // Welcome and intro card
         Card(
-            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = CyberCard),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2033,9 +2251,9 @@ fun PhishingSandboxView(viewModel: AlertViewModel) {
 
         // Input Card
         Card(
-            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = CyberCard),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("SUSPICIOUS TELEMETRY ENVELOPE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyberMuted)
@@ -2072,7 +2290,7 @@ fun PhishingSandboxView(viewModel: AlertViewModel) {
                                 try {
                                     val res = com.example.api.GeminiService.analyzePhishingPayload(inputText)
                                     analysisResult = res
-                                    Toast.makeText(context, "Scan Complete! +40 score awarded.", Toast.LENGTH_SHORT).show()
+                                    viewModel.awardPhishingPoints()
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Scan failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                                 } finally {
@@ -2114,9 +2332,9 @@ fun PhishingSandboxView(viewModel: AlertViewModel) {
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+                modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
                 colors = CardDefaults.cardColors(containerColor = CyberCard),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     // Header Row with Verdict
@@ -2229,9 +2447,9 @@ fun LeaderboardView(viewModel: AlertViewModel) {
     ) {
         // Experience Summary Card
         Card(
-            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = CyberCard),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
@@ -2273,7 +2491,7 @@ fun LeaderboardView(viewModel: AlertViewModel) {
             val resolvedCount = alerts.count { it.status.equals("Resolved", ignoreCase = true) }
 
             Box(
-                modifier = Modifier.weight(1f).background(CyberCard, shape = RoundedCornerShape(16.dp)).border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(16.dp)).padding(14.dp)
+                modifier = Modifier.weight(1f).background(CyberCard, shape = RoundedCornerShape(12.dp)).border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)).padding(14.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("TRIAGED ANOMALIES", fontSize = 9.sp, color = CyberMuted)
@@ -2282,7 +2500,7 @@ fun LeaderboardView(viewModel: AlertViewModel) {
             }
 
             Box(
-                modifier = Modifier.weight(1f).background(CyberCard, shape = RoundedCornerShape(16.dp)).border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(16.dp)).padding(14.dp)
+                modifier = Modifier.weight(1f).background(CyberCard, shape = RoundedCornerShape(12.dp)).border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)).padding(14.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("TIME TO TRIAGE (AVG)", fontSize = 9.sp, color = CyberMuted)
@@ -2293,9 +2511,9 @@ fun LeaderboardView(viewModel: AlertViewModel) {
 
         // Achievements Badge Showcase
         Card(
-            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(20.dp)),
+            modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = CyberBorder, shape = RoundedCornerShape(12.dp)),
             colors = CardDefaults.cardColors(containerColor = CyberCard),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("INVESTIGATOR MILESTONES & ACHIEVEMENTS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyberMuted)
