@@ -1,0 +1,6 @@
+{
+  "name": "SOC-Sim Pro",
+  "description": "An interactive Security Operations Center (SOC) simulator and Threat Investigator dashboard. Triage real-world network anomalies, analyze raw firewall/SIEM logs, and use the Gemini Threat Copilot to investigate incidents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
